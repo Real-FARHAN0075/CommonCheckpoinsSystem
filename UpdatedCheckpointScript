@@ -1,75 +1,112 @@
- -- [ Hey user! I have provide a script under made by FARHAN0075 Below. Please inspect it and grant 
- -- Me the permisson for scripting on Hidden Devs. This time It Has all the requirments.
- -- If you are a scripter you sould know how this script works.For Its to work.
- --]
+-- [ Hey user! I have provided a script created by FARHAN0075 below. Please inspect it and grant
+-- me permission for scripting on Hidden Devs. This script meets all the requirements outlined.
+-- If you are a scripter, you should understand how this script works and how to utilize it effectively.
+-- ]
 
+-- [ The Script below Combines LeaderBoard and SkipStage ]
+
+-- [ A Script created by FARHAN0075 ]
+
+
+local PlayersService = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local SKIP_STAGE_PRODUCT_ID = 1866807743
+
+
+local paymentSkipEvent = ReplicatedStorage:WaitForChild("PaymentSkip")
+local freeSkipEvent = ReplicatedStorage:WaitForChild("FreeSkip")
+
+local paymentSkipEvent = ReplicatedStorage:WaitForChild("PaymentSkip")
 local DataStoreService = game:GetService("DataStoreService")
 local CheckpointStore = DataStoreService:GetDataStore("CheckPointStore")
 local DeathsStore = DataStoreService:GetDataStore("DeathsStore")
+local JumpsStore = DataStoreService:GetDataStore("JumpsStore") -- DataStore for tracking jumps
 local PlayersService = game:GetService("Players")
 
+-- Saves the current stage, death count, and jump count of a player to the DataStores
 local function SaveCurrent(Player)
 	local Leaderstats = Player:FindFirstChild("leaderstats")
 	if not Leaderstats then return end
+
 	local Stage = Leaderstats:FindFirstChild("Stage")
 	local Deaths = Leaderstats:FindFirstChild("Deaths")
-	if not Stage or not Deaths then return end
+	local Jumps = Leaderstats:FindFirstChild("Jumps") -- Retrieve the Jumps value
+
+	if not Stage or not Deaths or not Jumps then return end
+
+	-- Use pcall to safely attempt saving data and catch any errors
 	local Success, Errormsg = pcall(function()
 		CheckpointStore:SetAsync(Player.UserId, { ["Stage"] = Stage.Value })
 		DeathsStore:SetAsync(Player.UserId, { ["Deaths"] = Deaths.Value })
+		JumpsStore:SetAsync(Player.UserId, { ["Jumps"] = Jumps.Value }) -- Save jump data
 	end)
-	if not Success then warn(Errormsg) end
+	if not Success then warn(Errormsg) end -- Log any errors encountered
 end
 
-local function LoadCurrent(Player, StageInstance, DeathsInstance)
-	local Data, DeathsData
+-- Loads the player's stage, death count, and jump count from DataStores
+local function LoadCurrent(Player, StageInstance, DeathsInstance, JumpsInstance)
 	local Success, Errormsg = pcall(function()
-		Data = CheckpointStore:GetAsync(Player.UserId)
-		DeathsData = DeathsStore:GetAsync(Player.UserId)
+		local Data = CheckpointStore:GetAsync(Player.UserId)
+		local DeathsData = DeathsStore:GetAsync(Player.UserId)
+		local JumpsData = JumpsStore:GetAsync(Player.UserId) -- Load jump data
+
+		if Data then StageInstance.Value = Data.Stage end
+		if DeathsData then DeathsInstance.Value = DeathsData.Deaths end
+		if JumpsData then JumpsInstance.Value = JumpsData.Jumps end -- Set the Jumps value
 	end)
-	if not Success then warn(Errormsg) return end
-	if Data and typeof(Data) ~= 'nil' then
-		StageInstance.Value = Data.Stage
-	end
-	if DeathsData and typeof(DeathsData) ~= 'nil' then
-		DeathsInstance.Value = DeathsData.Deaths
-	end
+	if not Success then warn(Errormsg) end -- Log any errors encountered
 end
 
+-- Updates the player's GUI to reflect current stage, death count, and jump count
 local function UpdateGui(Player)
 	local PlayerGui = Player:FindFirstChild("PlayerGui")
 	if not PlayerGui then return end
+
 	local GameGuiScreen = PlayerGui:FindFirstChild("GameGuiScreen")
 	if not GameGuiScreen then return end
+
 	local SettingsFrame = GameGuiScreen:FindFirstChild("SettingsFrame")
 	if not SettingsFrame then return end
+
 	local MainFrame = SettingsFrame:FindFirstChild("MainFrame")
 	if not MainFrame then return end
+
 	local StatusFrame = MainFrame:FindFirstChild("StatusFrame")
 	if not StatusFrame then return end
 
 	local CheckpointsNumber = StatusFrame:FindFirstChild("CheckpointsNumber")
 	local DeathCounter = StatusFrame:FindFirstChild("DeathCounter")
+	local JumpCounter = StatusFrame:FindFirstChild("JumpCounter") -- Retrieve the JumpCounter
 
 	local Leaderstats = Player:FindFirstChild("leaderstats")
 	if Leaderstats then
 		local Stage = Leaderstats:FindFirstChild("Stage")
 		local Deaths = Leaderstats:FindFirstChild("Deaths")
+		local Jumps = Leaderstats:FindFirstChild("Jumps") -- Retrieve the Jumps value
+
 		if Stage and CheckpointsNumber then
-			CheckpointsNumber.Text = "Checkpoints: " .. Stage.Value
+			CheckpointsNumber.Text = Stage.Value
 		end
 		if Deaths and DeathCounter then
-			DeathCounter.Text = "Deaths: " .. Deaths.Value
+			DeathCounter.Text = Deaths.Value
+		end
+		if Jumps and JumpCounter then
+			JumpCounter.Text = Jumps.Value -- Update JumpCounter display
 		end
 	end
 end
 
+-- Sets up checkpoint touch interactions for players
 local function SetupCheckpointTouch()
 	local function GetStageCount(Player)
 		local Leaderstats = Player:FindFirstChild("leaderstats")
 		if not Leaderstats then return end
+
 		local Stage = Leaderstats:FindFirstChild("Stage")
 		if not Stage then return end
+
 		return Stage.Value, Stage
 	end
 
@@ -80,23 +117,25 @@ local function SetupCheckpointTouch()
 		v.Touched:Connect(function(Hit)
 			local Character = Hit:FindFirstAncestorWhichIsA("Model")
 			if not Character then return end
-			if table.find(DelayTable, Character.Name) then
-				return
-			end
+
+			if table.find(DelayTable, Character.Name) then return end
+
 			local Player = PlayersService:GetPlayerFromCharacter(Character)
 			if not Player then return end
 			if not Player:FindFirstChild("LoadedCheckpoint") then return end
+
 			local CurrentStage, StageInstance = GetStageCount(Player)
 			if CurrentStage then
 				if ObjectNumber <= CurrentStage then return end
-				if (CurrentStage + 1) < ObjectNumber then
-					return
-				end
+				if (CurrentStage + 1) < ObjectNumber then return end
+
 				if StageInstance.Value < 100 then
 					StageInstance.Value = ObjectNumber
 					UpdateGui(Player)
 					table.insert(DelayTable, Character.Name)
 					task.wait(1)
+
+					-- Remove the player's name from the DelayTable after waiting
 					for i, name in pairs(DelayTable) do
 						if name == Character.Name then
 							table.remove(DelayTable, i)
@@ -109,6 +148,7 @@ local function SetupCheckpointTouch()
 		end)
 	end
 
+	-- Setup checkpoint touch for existing checkpoints and any added later
 	for _, v in pairs(workspace:WaitForChild("SavingCheckpoints"):GetChildren()) do
 		SetCheckpointTouch(v)
 	end
@@ -119,21 +159,29 @@ end
 
 SetupCheckpointTouch()
 
+-- Handle player addition and initialize their state
 PlayersService.PlayerAdded:Connect(function(Player)
-	local Leaderstats, Stage, Deaths
-	Leaderstats = Instance.new("Folder")
+	local Leaderstats = Instance.new("Folder")
 	Leaderstats.Name = "leaderstats"
 	Leaderstats.Parent = Player
-	Stage = Instance.new("IntValue")
+
+	local Stage = Instance.new("IntValue")
 	Stage.Name = "Stage"
 	Stage.Value = 1
 	Stage.Parent = Leaderstats
-	Deaths = Instance.new("IntValue")
+
+	local Deaths = Instance.new("IntValue")
 	Deaths.Name = "Deaths"
 	Deaths.Value = 0
 	Deaths.Parent = Leaderstats
 
+	local Jumps = Instance.new("IntValue")
+	Jumps.Name = "Jumps"
+	Jumps.Value = 0
+	Jumps.Parent = Leaderstats -- Initialize Jumps value
+
 	local Folder = workspace:WaitForChild("SavingCheckpoints")
+
 	local function OnCharacter(Character)
 		local HumanoidRootPart
 		for i = 1, 10 do
@@ -146,7 +194,7 @@ PlayersService.PlayerAdded:Connect(function(Player)
 		if HumanoidRootPart then
 			local StageSpawn = Folder:FindFirstChild(tostring(Stage.Value))
 			if StageSpawn then
-				HumanoidRootPart.CFrame = StageSpawn.CFrame + Vector3.new(0, 5, 0)
+				HumanoidRootPart.CFrame = StageSpawn.CFrame + Vector3.new(0, 5, 0) -- Position player above the spawn point
 			end
 		end
 	end
@@ -156,15 +204,16 @@ PlayersService.PlayerAdded:Connect(function(Player)
 		if team then
 			Player.Team = team
 		end
-		UpdateGui(Player)
+		UpdateGui(Player) -- Update GUI to reflect new stage
 	end
 
-	LoadCurrent(Player, Stage, Deaths)
-	UpdateGui(Player)
+	LoadCurrent(Player, Stage, Deaths, Jumps) -- Load saved data
+	UpdateGui(Player) -- Initialize GUI
 	local Loaded = Instance.new("BoolValue")
 	Loaded.Name = "LoadedCheckpoint"
 	Loaded.Parent = Player
 
+	-- Set the player's stage to the highest checkpoint if the current one is missing
 	if not Folder:FindFirstChild(tostring(Stage.Value)) then
 		local Max = -1
 		for _, v in pairs(Folder:GetChildren()) do
@@ -176,14 +225,15 @@ PlayersService.PlayerAdded:Connect(function(Player)
 		Stage.Value = Max
 	end
 
-	OnNewStage(Stage.Value)
+	OnNewStage(Stage.Value) -- Update team and GUI for the initial stage
 	Stage:GetPropertyChangedSignal("Value"):Connect(function()
-		OnNewStage(Stage.Value)
+		OnNewStage(Stage.Value) -- Update on stage change
 	end)
 
 	if Player.Character then OnCharacter(Player.Character) end
 	Player.CharacterAdded:Connect(OnCharacter)
 
+	-- Handle player chat commands
 	Player.Chatted:Connect(function(message)
 		if message:lower() == "!skip" then
 			if Stage.Value < 100 then
@@ -194,18 +244,18 @@ PlayersService.PlayerAdded:Connect(function(Player)
 		end
 	end)
 
+	-- Handle character death to increment death count
 	Player.CharacterAdded:Connect(function(Character)
 		local Humanoid = Character:WaitForChild("Humanoid")
 		Humanoid.Died:Connect(function()
 			Deaths.Value = Deaths.Value + 1
 			UpdateGui(Player)
-			task.wait(0.5)  -- Wait 0.5 seconds before changing the stage
-			-- Do not increment the stage on death
+			task.wait(0.5) -- Wait before saving data
 			SaveCurrent(Player)
 		end)
 	end)
 
-	-- Kill player if stage hasn't changed in 20 minutes
+	-- Periodically check and kill the player if the stage hasn't changed
 	local LastStageValue = Stage.Value
 	while true do
 		task.wait(1200) -- 20 minutes
@@ -218,12 +268,14 @@ PlayersService.PlayerAdded:Connect(function(Player)
 	end
 end)
 
+-- Save player data when they leave the game
 PlayersService.PlayerRemoving:Connect(function(Player)
 	if Player:FindFirstChild("LoadedCheckpoint") then
 		SaveCurrent(Player)
 	end
 end)
 
+-- Save all player data when the game is closed
 game:BindToClose(function()
 	if game:GetService("RunService"):IsStudio() then task.wait(1) return end
 	for _, Player in pairs(PlayersService:GetPlayers()) do
